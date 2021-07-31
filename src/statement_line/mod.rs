@@ -23,7 +23,7 @@ impl std::str::FromStr for TransactionType {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct Transaction {
+pub struct StatementLine {
     pub amount: String,
     pub card: String,
     pub conversion_charge: String,
@@ -35,6 +35,16 @@ pub struct Transaction {
     pub transaction_date: NaiveDate,
     #[serde(with = "serde_with::rust::display_fromstr")]
     r#type: TransactionType,
+}
+
+impl StatementLine {
+    pub fn is_debit(&self) -> bool {
+        self.r#type == TransactionType::Debit
+    }
+
+    pub fn is_credit(&self) -> bool {
+        self.r#type == TransactionType::Credit
+    }
 }
 
 #[cfg(test)]

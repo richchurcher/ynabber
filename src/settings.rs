@@ -1,14 +1,29 @@
 use config::{Config, ConfigError, File};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
-pub struct YNAB {
+pub struct YNABSettings {
     pub access_token: String,
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RichSettings {
+    pub budget_id: String,
+    pub visa_business_id: String,
+    pub visa_personal_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PayeeSettings {
+    pub regex: HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Settings {
-    pub ynab: YNAB,
+    pub ynab: YNABSettings,
+    pub rich: RichSettings,
+    pub payee: PayeeSettings,
 }
 
 const SETTINGS_FILE_PATH: &str = "./Settings.toml";
