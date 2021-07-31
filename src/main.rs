@@ -27,11 +27,11 @@ async fn main() {
     };
 
     let account_suffix = statement_lines[0].card.split('-').next_back().unwrap();
-    let account_id = match account_suffix {
-        "9132" => &settings.rich.visa_personal_id,
-        "8834" => &settings.rich.visa_business_id,
-        _ => panic!("Unable to determine account number."),
-    };
+    if !&settings.rich.cards.contains_key(account_suffix.clone()) {
+        panic!("Unrecognised account suffix: {}", account_suffix);
+    }
+    let account_key = &settings.rich.cards[account_suffix];
+    let account_id = &settings.rich.accounts[account_key];
 
     for line in statement_lines.iter() {
         if let Err(err) = budget

@@ -10,8 +10,8 @@ pub struct YNABSettings {
 #[derive(Debug, Deserialize)]
 pub struct RichSettings {
     pub budget_id: String,
-    pub visa_business_id: String,
-    pub visa_personal_id: String,
+    pub accounts: HashMap<String, String>,
+    pub cards: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
