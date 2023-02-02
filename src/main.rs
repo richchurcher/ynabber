@@ -26,6 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     let bank_transactions = bank
         .latest_transactions(&settings.rich.accounts["visa_personal_akahu_id"])
+        // .latest_transactions(&settings.rich.accounts["visa_business_akahu_id"])
         .unwrap_or_else(|e| {
             panic!("Error reading Akahu API: {}", e);
         });

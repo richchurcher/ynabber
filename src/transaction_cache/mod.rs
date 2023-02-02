@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
+#[derive(Debug)]
 pub struct TransactionCacheItem {
     pub akahu_account_id: String,
     pub akahu_transaction_id: String,
@@ -69,6 +70,7 @@ impl TransactionCache {
         return Err(format!("No such account ID found in cache: {}", account_id).into());
     }
 
+    // TODO: needs to allow for multiple accounts per file
     pub fn set_latest_transaction(&self, t: &TransactionCacheItem) -> Result<(), Box<dyn Error>> {
         let mut file = File::create(&self.path)?;
         let contents = format!(

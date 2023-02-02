@@ -2,13 +2,46 @@ use crate::bank_api::AkahuTransaction;
 use regex::Regex;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
 use ynab_api::apis::{client::APIClient, configuration::ApiKey, configuration::Configuration};
-use ynab_api::models::{save_transaction::Cleared, SaveTransaction, SaveTransactionsWrapper};
+use ynab_api::models::{
+    save_transaction::Cleared, SaveTransaction, SaveTransactionsResponse, SaveTransactionsWrapper,
+};
+
+use crate::transaction_cache::{TransactionCache, TransactionCacheItem};
 
 pub struct BudgetAPI {
     budget_id: String,
     client: APIClient,
     payee_regex: HashMap<String, String>,
+    transaction_cache: TransactionCache,
+}
+
+#[derive(Debug)]
+pub struct BudgetError {
+    pub message: String,
+    pub ynab_error: Option<ynab_api::apis::Error>,
+}
+
+impl fmt::Display for BudgetError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for BudgetError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
+impl BudgetError {
+    pub fn new(message: &str, ynab_error: Option<ynab_api::apis::Error>) -> Self {
+        Self {
+            message: message.to_string(),
+            ynab_error,
+        }
+    }
 }
 
 impl BudgetAPI {
@@ -28,6 +61,7 @@ impl BudgetAPI {
             budget_id: budget_id.to_owned(),
             client: APIClient::new(ynab_config),
             payee_regex: payee_regex.to_owned(),
+            transaction_cache: TransactionCache::new(".transaction_cache")?,
         })
     }
 
@@ -59,19 +93,25 @@ impl BudgetAPI {
         &mut self,
         transaction_wrapper: SaveTransactionsWrapper,
         dry_run: bool,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<SaveTransactionsResponse, Box<dyn Error>> {
         if dry_run {
             println!("## DRY RUN ##");
             println!("{:#?}", transaction_wrapper);
-            return Ok(());
+            // TODO: this stops the rest of the run
+            return Err(BudgetError::new("Dry run.", None).into());
         }
 
-        let result = self
+        let result = match self
             .client
             .transactions_api()
-            .create_transaction(&self.budget_id, transaction_wrapper);
+            .create_transaction(&self.budget_id, transaction_wrapper)
+        {
+            Ok(r) => r,
+            Err(e) => return Err(BudgetError::new("Nope.", Some(e)).into()),
+        };
+
         println!("{:#?}", result);
-        Ok(())
+        Ok(result)
     }
 
     pub fn find_payee_id(&mut self, details: &str) -> Option<String> {
@@ -98,7 +138,7 @@ impl BudgetAPI {
             None => Some(akahu_transaction.description.to_owned()),
         };
 
-        if let Err(err) = self.create_transaction(
+        let ynab_result = match self.create_transaction(
             SaveTransactionsWrapper {
                 transaction: Some(SaveTransaction {
                     account_id: account_id.to_owned(),
@@ -117,8 +157,30 @@ impl BudgetAPI {
             },
             dry_run,
         ) {
-            return Err(err);
-        }
+            Ok(r) => r,
+            Err(e) => return Err(e),
+        };
+
+        let ynab_transaction_id = ynab_result
+            .data
+            .transaction
+            .ok_or("No transaction detail available.")?
+            .id;
+
+        let latest_transaction = TransactionCacheItem {
+            akahu_account_id: akahu_transaction._account.to_owned(),
+            akahu_transaction_id: akahu_transaction._id.to_owned(),
+            transaction_date: akahu_transaction.created_at,
+            ynab_account_id: account_id.to_string(),
+            ynab_transaction_id,
+        };
+        println!(
+            "Success, so update transaction cache to {:#?}",
+            latest_transaction
+        );
+        self.transaction_cache
+            .set_latest_transaction(&latest_transaction)?;
+
         Ok(())
     }
 }
