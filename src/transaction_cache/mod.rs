@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TransactionCacheItem {
     pub akahu_account_id: String,
     pub akahu_transaction_id: String,
@@ -70,19 +70,51 @@ impl TransactionCache {
         return Err(format!("No such account ID found in cache: {}", account_id).into());
     }
 
-    // TODO: needs to allow for multiple accounts per file
     pub fn set_latest_transaction(&self, t: &TransactionCacheItem) -> Result<(), Box<dyn Error>> {
-        let mut file = File::create(&self.path)?;
-        let contents = format!(
-            "{}\n{}\n{}\n{}\n{}",
-            t.akahu_account_id,
-            t.ynab_account_id,
-            t.akahu_transaction_id,
-            t.ynab_transaction_id,
-            t.transaction_date
-        );
+        // TODO: maybe generalise this to avoid repetition in get_latest_transaction
+        // (or hell, stop using a flat file)
+        let read_file = File::open(&self.path)?;
+        let lines = io::BufReader::new(read_file)
+            .lines()
+            .map(|x| x.unwrap())
+            .collect::<Vec<String>>();
+        let mut cache_items: Vec<TransactionCacheItem> = vec![];
+        let mut i = 0;
+        while i < lines.len() {
+            let account_cache_raw = &lines[i..i + 5];
 
-        Ok(file
+            if account_cache_raw[0] == t.akahu_account_id {
+                cache_items.push(t.clone());
+            } else {
+                let transaction_date =
+                    DateTime::parse_from_rfc3339(&account_cache_raw[4])?.with_timezone(&Utc);
+                cache_items.push(TransactionCacheItem {
+                    akahu_account_id: account_cache_raw[0].to_owned(),
+                    ynab_account_id: account_cache_raw[1].to_owned(),
+                    akahu_transaction_id: account_cache_raw[2].to_owned(),
+                    transaction_date,
+                    ynab_transaction_id: account_cache_raw[3].to_owned(),
+                });
+            }
+
+            i = i + 5;
+        }
+
+        let mut write_file = File::create(&self.path)?;
+        let mut contents = String::new();
+        for item in cache_items {
+            let rfc3339 = item.transaction_date.to_rfc3339();
+            contents.push_str(&format!(
+                "{}\n{}\n{}\n{}\n{}\n",
+                item.akahu_account_id,
+                item.ynab_account_id,
+                item.akahu_transaction_id,
+                item.ynab_transaction_id,
+                rfc3339,
+            ));
+        }
+
+        Ok(write_file
             .write_all(contents.as_bytes())
             .expect("Couldn't write to cache file."))
     }

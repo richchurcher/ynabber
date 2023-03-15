@@ -2,46 +2,23 @@ use chrono::{DateTime, Utc};
 use reqwest::blocking::Client;
 use reqwest::header;
 use serde::Deserialize;
-use serde_with::{serde_as, DisplayFromStr};
-use std::error::Error;
+use serde_with::serde_as;
+use std::{collections::HashMap, error::Error};
 
 use crate::transaction_cache::TransactionCache;
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-enum AkahuCategoryComponentType {
-    Base,
-    Group,
-    PFM,
-}
-
 #[serde_as]
 #[derive(Clone, Debug, Deserialize)]
-pub struct AkahuCategoryComponent {
+pub struct AkahuCategoryGroup {
+    pub _id: String,
     pub name: String,
-    #[serde_as(as = "DisplayFromStr")]
-    r#type: AkahuCategoryComponentType,
-}
-
-impl std::str::FromStr for AkahuCategoryComponentType {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "nzfcc:base" => Ok(AkahuCategoryComponentType::Base),
-            "nzfcc:group" => Ok(AkahuCategoryComponentType::Group),
-            "nzfcc:pfm" => Ok(AkahuCategoryComponentType::PFM),
-            _ => Err(format!(
-                "'{}' is not a valid value for AkahuCategoryComponentType",
-                s
-            )),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct AkahuCategory {
     _id: String,
-    components: Vec<AkahuCategoryComponent>,
+    name: String,
+    groups: HashMap<String, AkahuCategoryGroup>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -115,7 +92,9 @@ impl BankAPI {
             app_token: app_token.to_string(),
             base_url: "https://api.akahu.io/v1".to_string(),
             client,
-            transaction_cache: TransactionCache::new(".transaction_cache")?,
+            transaction_cache: TransactionCache::new(
+                "/home/basie/.cache/ynabber/.transaction_cache",
+            )?,
             user_token: user_token.to_string(),
         })
     }
@@ -134,7 +113,7 @@ impl BankAPI {
                 url.push_str(&format!("?cursor={}", cursor));
             }
 
-            let res = self.client.get(url).send()?;
+            let res = self.client.get(url.to_owned()).send()?;
             let atr = res.json::<AkahuTransactionResponse>()?;
 
             let mut new_transactions: Vec<AkahuTransaction> = atr
@@ -155,7 +134,6 @@ impl BankAPI {
                 break;
             }
 
-            println!("{:?}", atr.cursor);
             cursor = match atr.cursor {
                 Some(c) => match c.next {
                     Some(n) => n,
@@ -179,40 +157,5 @@ impl BankAPI {
         );
 
         Ok(transactions)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::str::FromStr;
-
-    #[test]
-    fn akahu_category_component_type_base() {
-        assert_eq!(
-            AkahuCategoryComponentType::from_str("nzfcc:base").unwrap(),
-            AkahuCategoryComponentType::Base
-        );
-    }
-
-    #[test]
-    fn akahu_category_component_type_group() {
-        assert_eq!(
-            AkahuCategoryComponentType::from_str("nzfcc:group").unwrap(),
-            AkahuCategoryComponentType::Group
-        );
-    }
-
-    #[test]
-    fn akahu_category_component_type_pfm() {
-        assert_eq!(
-            AkahuCategoryComponentType::from_str("nzfcc:pfm").unwrap(),
-            AkahuCategoryComponentType::PFM
-        );
-    }
-
-    #[test]
-    fn akahu_category_component_type_invalid() {
-        assert!(AkahuCategoryComponentType::from_str("definitely not a type").is_err());
     }
 }

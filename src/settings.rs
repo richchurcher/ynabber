@@ -16,8 +16,13 @@ pub struct BankSettings {
 #[derive(Debug, Deserialize)]
 pub struct RichSettings {
     pub budget_id: String,
-    pub accounts: HashMap<String, String>,
-    pub cards: HashMap<String, String>,
+    pub accounts: HashMap<String, AccountSettings>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct AccountSettings {
+    pub akahu_id: String,
+    pub ynab_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,7 +38,8 @@ pub struct Settings {
     pub payee: PayeeSettings,
 }
 
-const SETTINGS_FILE_PATH: &str = "./Settings.toml";
+// TODO: fix
+const SETTINGS_FILE_PATH: &str = "/home/basie/.config/ynabber/Settings.toml";
 
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {

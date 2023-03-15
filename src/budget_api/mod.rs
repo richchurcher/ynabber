@@ -18,31 +18,21 @@ pub struct BudgetAPI {
 }
 
 #[derive(Debug)]
-pub struct BudgetError {
-    pub message: String,
-    pub ynab_error: Option<ynab_api::apis::Error>,
+pub enum BudgetError {
+    ApiError(String),
+    DryRun,
 }
 
 impl fmt::Display for BudgetError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl Error for BudgetError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
-}
-
-impl BudgetError {
-    pub fn new(message: &str, ynab_error: Option<ynab_api::apis::Error>) -> Self {
-        Self {
-            message: message.to_string(),
-            ynab_error,
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BudgetError::DryRun => write!(f, "DRY RUN"),
+            BudgetError::ApiError(msg) => write!(f, "BudgetAPI error: {}", msg),
         }
     }
 }
+
+impl Error for BudgetError {}
 
 impl BudgetAPI {
     pub fn new(
@@ -61,7 +51,10 @@ impl BudgetAPI {
             budget_id: budget_id.to_owned(),
             client: APIClient::new(ynab_config),
             payee_regex: payee_regex.to_owned(),
-            transaction_cache: TransactionCache::new(".transaction_cache")?,
+            transaction_cache: TransactionCache::new(
+                // TODO: fix
+                "/home/basie/.cache/ynabber/.transaction_cache",
+            )?,
         })
     }
 
@@ -93,12 +86,11 @@ impl BudgetAPI {
         &mut self,
         transaction_wrapper: SaveTransactionsWrapper,
         dry_run: bool,
-    ) -> Result<SaveTransactionsResponse, Box<dyn Error>> {
+    ) -> Result<SaveTransactionsResponse, BudgetError> {
         if dry_run {
             println!("## DRY RUN ##");
             println!("{:#?}", transaction_wrapper);
-            // TODO: this stops the rest of the run
-            return Err(BudgetError::new("Dry run.", None).into());
+            return Err(BudgetError::DryRun);
         }
 
         let result = match self
@@ -107,7 +99,13 @@ impl BudgetAPI {
             .create_transaction(&self.budget_id, transaction_wrapper)
         {
             Ok(r) => r,
-            Err(e) => return Err(BudgetError::new("Nope.", Some(e)).into()),
+            // TODO: ynab_api's errors could be Reqwest, Serde, or Io: find a better way to provide
+            // more information?
+            Err(_) => {
+                return Err(BudgetError::ApiError(
+                    "Unable to create transaction.".to_owned(),
+                ))
+            }
         };
 
         println!("{:#?}", result);
@@ -149,7 +147,7 @@ impl BudgetAPI {
                     date: akahu_transaction.date.to_string(),
                     flag_color: None,
                     import_id: None,
-                    memo: None,
+                    memo: Some("🤖".to_owned()),
                     payee_id,
                     payee_name,
                 }),
@@ -158,7 +156,13 @@ impl BudgetAPI {
             dry_run,
         ) {
             Ok(r) => r,
-            Err(e) => return Err(e),
+            Err(e) => match e {
+                BudgetError::DryRun => {
+                    println!("Akahu transaction ID: {}", akahu_transaction._id);
+                    return Ok(());
+                }
+                BudgetError::ApiError(_) => return Err(e.into()),
+            },
         };
 
         let ynab_transaction_id = ynab_result
@@ -170,7 +174,7 @@ impl BudgetAPI {
         let latest_transaction = TransactionCacheItem {
             akahu_account_id: akahu_transaction._account.to_owned(),
             akahu_transaction_id: akahu_transaction._id.to_owned(),
-            transaction_date: akahu_transaction.created_at,
+            transaction_date: akahu_transaction.date,
             ynab_account_id: account_id.to_string(),
             ynab_transaction_id,
         };
