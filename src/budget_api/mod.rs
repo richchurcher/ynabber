@@ -51,10 +51,7 @@ impl BudgetAPI {
             budget_id: budget_id.to_owned(),
             client: APIClient::new(ynab_config),
             payee_regex: payee_regex.to_owned(),
-            transaction_cache: TransactionCache::new(
-                // TODO: fix
-                "/home/basie/.cache/ynabber/.transaction_cache",
-            )?,
+            transaction_cache: TransactionCache::new()?,
         })
     }
 

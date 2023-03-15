@@ -1,6 +1,7 @@
 use config::{Config, ConfigError, File};
+use home::home_dir;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, env, path::PathBuf};
 
 #[derive(Debug, Deserialize)]
 pub struct YNABSettings {
@@ -38,12 +39,20 @@ pub struct Settings {
     pub payee: PayeeSettings,
 }
 
-// TODO: fix
-const SETTINGS_FILE_PATH: &str = "/home/basie/.config/ynabber/Settings.toml";
-
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
-        let builder = Config::builder().add_source(File::with_name(SETTINGS_FILE_PATH));
+        let home = home_dir().unwrap_or(PathBuf::from("."));
+        let mut config_path = match env::var("XDG_CONFIG_HOME") {
+            Ok(p) => PathBuf::from(p),
+            Err(_) => {
+                let mut p = PathBuf::from(home);
+                p.push(".config");
+                p
+            }
+        };
+        config_path.push("ynabber");
+        config_path.push("Settings.toml");
+        let builder = Config::builder().add_source(File::from(config_path));
         match builder.build() {
             Ok(c) => c.try_deserialize(),
             Err(e) => Err(e),

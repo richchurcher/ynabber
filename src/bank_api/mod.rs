@@ -92,9 +92,7 @@ impl BankAPI {
             app_token: app_token.to_string(),
             base_url: "https://api.akahu.io/v1".to_string(),
             client,
-            transaction_cache: TransactionCache::new(
-                "/home/basie/.cache/ynabber/.transaction_cache",
-            )?,
+            transaction_cache: TransactionCache::new()?,
             user_token: user_token.to_string(),
         })
     }

@@ -1,8 +1,11 @@
 use chrono::{DateTime, Utc};
+use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead, Write};
-use std::path::Path;
+use std::path::PathBuf;
+
+use home::home_dir;
 
 #[derive(Clone, Debug)]
 pub struct TransactionCacheItem {
@@ -14,14 +17,23 @@ pub struct TransactionCacheItem {
 }
 
 pub struct TransactionCache {
-    path: &'static Path,
+    path: PathBuf,
 }
 
 impl TransactionCache {
-    pub fn new(cache_path: &'static str) -> Result<TransactionCache, Box<dyn Error>> {
-        Ok(TransactionCache {
-            path: Path::new(cache_path),
-        })
+    pub fn new() -> Result<TransactionCache, Box<dyn Error>> {
+        let home = home_dir().unwrap_or(PathBuf::from("."));
+        let mut cache_path = match env::var("XDG_CACHE_HOME") {
+            Ok(p) => PathBuf::from(p),
+            Err(_) => {
+                let mut p = PathBuf::from(home);
+                p.push(".cache");
+                p
+            }
+        };
+        cache_path.push("ynabber");
+        cache_path.push(".transaction_cache");
+        Ok(TransactionCache { path: cache_path })
     }
 
     pub fn get_latest_transaction(

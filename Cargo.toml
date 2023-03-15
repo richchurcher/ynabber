@@ -8,6 +8,7 @@ edition = "2021"
 chrono = { version = "0.4", features = ["serde"] }
 config = { version = "0.13", features = ["toml"] }
 csv = "1.1"
+home = "0.5.4"
 lazy_static = "1.4.0"
 regex = "1"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
